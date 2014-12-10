@@ -2,6 +2,11 @@ package soc;
 
 import mathlib.Matlab;
 
+/**
+ * 
+ * @author Alex J. Díaz Millán
+ *
+ */
 public class MarkovChain {
 
 	private double[][] predictionCurrent;
@@ -11,19 +16,45 @@ public class MarkovChain {
     private double P12_out;
     private double P21_out;
 	
-	// Inicializa vector de predicción de corriente
+    /**
+     * Inicializa vector de predicción de corriente
+     * @param predictionSize Int Largo de la predicción
+     */
 	public void initializePredictionCurrent(int predictionSize){
 		predictionCurrent	= Matlab.zeros(1, predictionSize + 1);
 	}
 	
+	/**
+	 * Se establece el valor de la predicción de corriente
+	 * @param _predictionCurrent Double[][] Predicción de corriente
+	 */
 	public void setPredictionCurrent(double[][] _predictionCurrent){
 		predictionCurrent = _predictionCurrent;
 	}
 	
+	/**
+	 * Se establece el valor en la posición i de la predicción de corriente
+	 * @param i Int Posición a establecer el valor
+	 * @param value Double Valor a ser establecido
+	 */
+	public void setPredictionCurrent(int i, double value) {
+		predictionCurrent[0][i]	= value;
+	}
+	
+	/**
+	 * Entrega el valor de la predicción de corriente
+	 * @return Double[][] Predicción de corriente
+	 */
 	public double[][] getPredictionCurrent() {
 		return predictionCurrent;
 	}
 	
+	/**
+	 * Método que realiza la caracterización del perfil de uso de la batería
+	 * @param currentSensor_k Double[][] Corriente sensada hasta la iteración k
+	 * @param k Int Iteración k
+	 * @param predictionStart Int Comienzo de la predicción
+	 */
 	public void CharacterizationProfile(double[][] currentSensor_k, int k, int predictionStart) {
 		// Se definen los intervalos y datos a considerar
 		double[][] discretizedCurrent	= Matlab.zeros(predictionStart, 1);		// Vector corriente discretizado
@@ -178,6 +209,10 @@ public class MarkovChain {
 		
 	}
 
+	/**
+	 * Método que realiza la Cadena de Markov, establece la predicción de la corriente dado las probabilidades de transición y los estados calculados en la caracterización del perfil de uso de la batería 
+	 * @param predictionSize Int Tamaño de la predicción
+	 */
 	public void RealizationMC(int predictionSize) {
 		
 		// Genera un número aleatorio entre 0 y 1 (Uniforme)
@@ -212,10 +247,5 @@ public class MarkovChain {
 		}
 		
 	}
-
-	public void setPredictionCurrent(int i, double value) {
-		predictionCurrent[0][i]	= value;
-	}
-
 	
 }

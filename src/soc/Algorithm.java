@@ -5,6 +5,11 @@ import data.DataManagement;
 import data.ParameterizationBattery;
 import data.Route;
 
+/**
+ * 
+ * @author Alex J. Díaz Millán
+ *
+ */
 public class Algorithm {
 	
 	private static int predictionStart, predictionSize;
@@ -43,14 +48,9 @@ public class Algorithm {
 		
 		//double[][] internalResistancePrediction   	= Matlab.zeros(1, (predictionHorizon-predictionStart));	
 		
-		double characterizationProfile      		= 0;            											// Caracterización del perfil futuro ( =1 Ipromedio; ~=1 CM )
+		int characterizationProfile	= 0;            		// Caracterización del perfil futuro ( =1 Ipromedio; ~=1 CM )
 		
-		// Modelo de transición de estados (X1=Resistencia Interna, X2=SOC) 
-		//--------------------------MODELO-------------------------------------------------------------------------------------------------------
-		//   x1(k+1) = x1(k) + w1(k)
-		//   x2(k+1) = x2(k) + (v(k)*i(k)*delta_T)/criticalEnergy + w2(k)
-		//   v(k) = vL + (v0-vL)*exp(gamma*(x2(k)-1)) + alfa*vL*(x2(k)-1) + (1-alfa)*vL*(exp(-beta)-exp(-beta*sqrt(x2(k)))) - i(k)*x1(k) + eta(k)
-		//---------------------------------------------------------------------------------------------------------------------------------------
+		// Modelo de transición de estados (X1=Resistencia Interna, X2=SOC)
 		Model model 			= new Model();
 		model.initializeStates(lengthPF);							// PDF inicial estados
 		model.initializeEstimatedVoltage(currentSensor[1][0], lengthPF);	// Se genera el vector de observación inicial
@@ -135,8 +135,10 @@ public class Algorithm {
 			socError[i][0] 		= Math.pow((sampleRealSOC[i][0] - estimatedSOC[0][i]), 2); 
 		}
 		
-		double averageVoltageError   	= Math.sqrt(Matlab.mean(voltageError, 0, "columna")); 
-		double averageSocError			= Math.sqrt(Matlab.mean(socError, 0, "columna"));
+		double[][] averageVoltageError 	= new double[1][1];
+		double[][] averageSocError 		= new double[1][1];
+		averageVoltageError[0][0]  		= Math.sqrt(Matlab.mean(voltageError, 0, "columna")); 
+		averageSocError[0][0]			= Math.sqrt(Matlab.mean(socError, 0, "columna"));
 		
 		// Guardar Resultados obtenidos
 		saveData(sampleRealSOC, estimatedSOC, model.getEstimatedVoltage(), model.getPredictionVoltage(), model.getPredictionSoc(), averageVoltageError, averageSocError);
@@ -149,7 +151,12 @@ public class Algorithm {
 	
 	/**
 	 * Algoritmo de Estimación basado en Filtro de Partículas
-	 */	
+	 * @param model Object Objeto de la clase Model, contiene los parámetros y funciones asociadas al modelo a utilizar
+	 * @param filter Object Objeto de la clase ParticleFilter, contiene parámetros y funciones asociadas al filtro de partículas
+	 * @param voltageObserved Double Voltaje observado por el sensor
+	 * @param voltage_1 Double Voltaje anterior observado por el sensor
+	 * @param current Double Corriente observada por el sensor
+	 */
 	private static void EstimationPF(Model model, ParticleFilter filter, double voltageObserved, double voltage_1, double current) {
 		
 		// Estimación del estado por cada partícula
@@ -176,11 +183,16 @@ public class Algorithm {
 		model.StatesEstimation(filter);
 	}
 
-	private static void PredictionPF(ParticleFilter filter, Model model, double[][] currentSensor_k, int predictionHorizon, double characterizationProfile) {
-		
-		/*
-		 * Algoritmo de Predicción basado en Filtro de Partículas
-		 */
+	
+	/**
+	 * Algoritmo de Predicción basado en Filtro de Partículas
+	 * @param filter Object Objeto de la clase ParticleFilter, contiene parámetros y funciones asociadas al filtro de partículas
+	 * @param model Object Objeto de la clase Model, contiene los parámetros y funciones asociadas al modelo a utilizar
+	 * @param currentSensor_k Double[][] Corriente observada por el sensor hasta la iteración k
+	 * @param predictionHorizon Int Horizonte de predicción
+	 * @param characterizationProfile 
+	 */
+	private static void PredictionPF(ParticleFilter filter, Model model, double[][] currentSensor_k, int predictionHorizon, int characterizationProfile) {
 		
 		// Se promedian todas las predicciones para un pronóstico (Cada predicción conlleva 1 realización de CM)
 		predictionSize  = predictionHorizon - filter.getK();	// Tamaño de predicción = Horizonte de predicción - Inicio de predicción
@@ -308,6 +320,13 @@ public class Algorithm {
 		
 	}
 
+	/**
+	 * Distribución de la predicción
+	 * @param filter Object Objeto de la clase ParticleFilter, contiene parámetros y funciones asociadas al filtro de partículas
+	 * @param model Object Objeto de la clase Model, contiene los parámetros y funciones asociadas al modelo a utilizar
+	 * @param predictionCurrent Double[][] Predicción de la corriente dada la caracterización del perfil
+	 * @param predictionSize Int Largo de la predicción
+	 */
 	private static void PredictionDistribution(ParticleFilter filter, Model model, double[][] predictionCurrent, int predictionSize) {
 		
 		int numberParticles 			= filter.getNumberParticles();
@@ -382,11 +401,16 @@ public class Algorithm {
 				
 	}
 
+	/**
+	 * Método que calcula la función densidad de probabilidad del punto de descarga del SOC de la batería
+	 * @param cumulativeDistributionSoc double[][] Distribución acumulada del SOC
+	 * @return Double[][] Función densidad de probabilidad del EOD
+	 */
 	private static double[][] PdfEod(double[][] cumulativeDistributionSoc) {
 		// Condiciones de CDF (Función Densidad Acumulada) 
-		double[][] pdf   = Matlab.diff(cumulativeDistributionSoc);
-		int length = pdf[0].length;
-		int aux   = 0;  												// Variable que encuentra el instante de tiempo donde pdf es positivo
+		double[][] pdf	= Matlab.diff(cumulativeDistributionSoc);
+		int length 		= pdf[0].length;
+		int aux   		= 0;											// Variable que encuentra el instante de tiempo donde pdf es positivo
 		double m, n;
 
 		if (Matlab.sum(pdf,0,"fila") != 0){								// CDF del SOC no alcanza el umbral de la HZ (cdf = 0)
@@ -433,13 +457,21 @@ public class Algorithm {
 		return pdf;
 	}
 
+	/**
+	 * Método que calcula el intervalo de confianza en torno al punto de descarga del SOC de la batería
+	 * @param filter Object Objeto de la clase ParticleFilter, contiene parámetros y funciones asociadas al filtro de partículas
+	 * @param model Object Objeto de la clase Model, contiene los parámetros y funciones asociadas al modelo a utilizar
+	 * @param pdf Double[][] Función densidad de probabilidad del EOD
+	 * @param tofSOC Double Valor del punto de descarga del SOC de la batería
+	 * @param predictionStart Double Comienzo de la etapa de predicción
+	 */
 	private static void ConfidenceInterval(ParticleFilter filter, Model model, double[][] pdf, double tofSOC, double predictionStart){
 		// Inicialización de variables
 		tofSOC       	= tofSOC - predictionStart;
 		int min, max;
 		double initialProbability, lowerLimit, upperLimit;
 	
-		// Cálculo del IC para cada instante (IC variable)
+		// Cálculo del Intervalo de Confianza para cada instante (Intervalo de Confianza variable)
 		if (tofSOC < 0) {
 		    min = 0;
 		    max = 0;
@@ -467,7 +499,7 @@ public class Algorithm {
 			    }
 			}
 	
-			// Determinación del IC
+			// Determinación del Intervalo de Confianza
 			for (int i = 0; i<pdf[0].length; i++) {	
 			    if (initialProbability < filter.getReliability()){      
 			        if(min > lowerLimit && max < upperLimit) {   
@@ -500,10 +532,14 @@ public class Algorithm {
 		filter.setMax(max);
 	}
 
-
-
-
-	
+	/**
+	 * Método que calcula el SOC dado los datos obtenidos desde los sensores
+	 * @param lengthPF Int Tamaño de datos a utilizar por el Filtro de Partículas
+	 * @param voltageSensor Double[][] Voltaje obtenido por el sensor
+	 * @param currentSensor Double[][] Corriente obtenido por el sensor
+	 * @param deltaT Double Diferencia de tiempo entre cada muestra
+	 * @return Double[][] SOC calculado a partir de los datos de Corriente y Voltaje
+	 */
 	private static double[][] CalculateRealSOC(int lengthPF, double[][] voltageSensor, double[][] currentSensor, double deltaT) {
 		double realInitialEnergy 		= 0;
 		double[][] realSOC				= Matlab.zeros(lengthPF, 1);
@@ -530,14 +566,25 @@ public class Algorithm {
 		return realSOC;
 	}
 	
-	private static void saveData(double[][] sampleRealSoc, double[][] estimatedSOC, double[][] estimatedVoltage, double[][] predictionVoltage, double[][] predictionSoc, double averageVoltageError, double averageSocError) {
+	
+	/**
+	 * Método que permite grabar datos en libros de Excel
+	 * @param sampleRealSoc Double[][] SOC calculado mediante los datos obtenidos desde los sensores
+	 * @param estimatedSOC Double[][] SOC estimado
+	 * @param estimatedVoltage Double[][] Voltaje estimado
+	 * @param predictionVoltage Double[][] Predicción del voltaje
+	 * @param predictionSoc Double[][] Predicción del SOC
+	 * @param averageVoltageError Double[][] Error promedio del voltaje
+	 * @param averageSocError Double[][] Error promedio del SOC
+	 */
+	private static void saveData(double[][] sampleRealSoc, double[][] estimatedSOC, double[][] estimatedVoltage, double[][] predictionVoltage, double[][] predictionSoc, double[][] averageVoltageError, double[][] averageSocError) {
 		DataManagement.grabarDatosExel(sampleRealSoc, "sampleRealSoc.xls");								// SOC real
 		DataManagement.grabarDatosExel(Matlab.transpose(estimatedSOC), "estimatedSOC.xls");				// SOC estimado
 		DataManagement.grabarDatosExel(Matlab.transpose(estimatedVoltage), "estimatedVoltage.xls");		// Voltaje estimado
 		DataManagement.grabarDatosExel(Matlab.transpose(predictionVoltage), "predictionVoltage.xls");	// Voltaje predicho
 		DataManagement.grabarDatosExel(Matlab.transpose(predictionSoc), "predictionSOC.xls");			// SOC predicho
-		//DataManagement.grabarDatosExel(averageVoltageError, "averageVoltageError.xls");					// Promedio del Error de Voltaje
-		//DataManagement.grabarDatosExel(averageSocError, "averageSocError.xls");							// Promedio del Error del SOC
+		DataManagement.grabarDatosExel(averageVoltageError, "averageVoltageError.xls");					// Promedio del Error de Voltaje
+		DataManagement.grabarDatosExel(averageSocError, "averageSocError.xls");							// Promedio del Error del SOC
 
 	}
 
